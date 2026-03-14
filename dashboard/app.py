@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-df = pd.read_csv("/dataset/customer_queries.csv")
+df = pd.read_csv("dataset/customer_queries.csv")
 
 def classify(q):
     q=q.lower()
