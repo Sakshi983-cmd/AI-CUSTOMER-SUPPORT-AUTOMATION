@@ -1,16 +1,27 @@
 import streamlit as st
 import pandas as pd
 
-df = pd.read_csv("dataset/classified_queries.csv")
+df = pd.read_csv("../dataset/customer_queries.csv")
 
-st.title("AI Customer Support Intelligence Dashboard")
+def classify(q):
+    q=q.lower()
+    if "refund" in q:
+        return "Refund"
+    elif "payment" in q:
+        return "Payment Issue"
+    elif "delivery" in q or "order" in q:
+        return "Order / Delivery"
+    elif "product" in q:
+        return "Product Complaint"
+    else:
+        return "General"
 
-issue_counts = df["category"].value_counts()
+df["category"]=df["query"].apply(classify)
+
+st.title("AI Customer Support Dashboard")
+
+issue_counts=df["category"].value_counts()
 
 st.bar_chart(issue_counts)
 
-percent = (issue_counts / issue_counts.sum()) * 100
-
-st.write("Issue Percentage Distribution")
-
-st.write(percent)
+st.write(issue_counts)
