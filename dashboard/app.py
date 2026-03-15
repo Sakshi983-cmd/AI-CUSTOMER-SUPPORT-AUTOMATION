@@ -4,7 +4,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import subprocess
 import os
-from groq import Groq
 
 st.set_page_config(
     page_title="Beastlife Support AI",
@@ -57,15 +56,6 @@ div[data-testid="stTextInput"] input {
 
 .stButton button:hover { background: #4f46e5 !important; }
 
-.stDataFrame { background: rgba(255,255,255,0.02) !important; }
-
-div[data-testid="stSelectbox"] > div {
-    background: rgba(255,255,255,0.04) !important;
-    border: 1px solid rgba(255,255,255,0.08) !important;
-    border-radius: 10px !important;
-    color: #e8eaf6 !important;
-}
-
 .block-container { padding: 2rem 2rem 2rem !important; }
 
 h1, h2, h3 { font-family: 'Syne', sans-serif !important; color: #e8eaf6 !important; }
@@ -77,14 +67,6 @@ h1, h2, h3 { font-family: 'Syne', sans-serif !important; color: #e8eaf6 !importa
     text-transform: uppercase;
     letter-spacing: 2px;
     margin-bottom: 12px;
-}
-
-.auto-card {
-    background: rgba(255,255,255,0.02);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 12px;
-    padding: 14px;
-    margin-bottom: 10px;
 }
 
 .live-badge {
@@ -102,24 +84,81 @@ h1, h2, h3 { font-family: 'Syne', sans-serif !important; color: #e8eaf6 !importa
 </style>
 """, unsafe_allow_html=True)
 
-client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-
 if not os.path.exists("dataset/classified_queries.csv"):
     subprocess.run(["python", "src/classifier.py"])
 
 df = pd.read_csv("dataset/classified_queries.csv")
 
-# ── HEADER ──────────────────────────────────────────
+CATEGORIES = {
+    "Order Tracking": [
+        "where is my order", "track my order", "order status",
+        "tracking link", "missing item", "wrong product",
+        "modify order", "cancel my order", "change delivery address",
+        "shows delivered", "order is delayed", "tracking not updating"
+    ],
+    "Delivery Delay": [
+        "delivery is late", "taking too long", "delivery date changed",
+        "stuck in transit", "how long does delivery", "agent did not contact",
+        "package is stuck", "delivery usually take"
+    ],
+    "Refund Request": [
+        "want refund", "refund not processed", "refund for damaged",
+        "return the product", "refund is still pending",
+        "replacement for damaged", "want to return"
+    ],
+    "Payment Failure": [
+        "payment failed", "payment declined", "payment not going",
+        "payment got deducted", "payment gateway", "charged twice",
+        "invoice for my purchase"
+    ],
+    "Product Complaint": [
+        "quality is bad", "arrived damaged", "bottle was damaged",
+        "seal was broken", "taste is different", "expired before delivery",
+        "supplement dosage", "product usage"
+    ],
+    "Subscription Issue": [
+        "subscription cancelled", "subscription charged",
+        "pause my subscription", "upgrade my subscription",
+        "subscription renewal failed"
+    ],
+}
+
+REPLIES = {
+    "Order Tracking":     "Hi! Your order is being processed. Here is your tracking link: [link]. Expected delivery in 3-5 days.",
+    "Delivery Delay":     "Sorry for the delay! Your order is on its way. Our team is monitoring it closely and will update you soon.",
+    "Refund Request":     "We have received your refund request and will process it within 5-7 business days. Thank you for your patience.",
+    "Payment Failure":    "Sorry for the inconvenience! Please retry using this link: [retry-link]. Contact us if the issue persists.",
+    "Product Complaint":  "We are sorry about your experience! Please share photos and we will arrange a replacement immediately.",
+    "Subscription Issue": "We have noted your subscription concern. Our team will resolve it within 24 hours.",
+    "General Question":   "Thanks for reaching out! Our support team will get back to you shortly.",
+}
+
+def classify_query(query):
+    query = query.lower()
+    for category, keywords in CATEGORIES.items():
+        for kw in keywords:
+            if kw in query:
+                return category
+    return "General Question"
+
+def get_priority(category):
+    if category in ["Refund Request", "Payment Failure"]:
+        return "High"
+    elif category in ["Delivery Delay", "Product Complaint", "Subscription Issue"]:
+        return "Medium"
+    return "Low"
+
+# HEADER
 col_h1, col_h2 = st.columns([3, 1])
 with col_h1:
     st.markdown("## Beastlife Intelligence")
-    st.markdown('<p style="font-family:\'DM Mono\',monospace;font-size:11px;color:#4f5a7a;">AI CUSTOMER SUPPORT SYSTEM — 2026</p>', unsafe_allow_html=True)
+    st.markdown('<p style="font-family:\'DM Mono\',monospace;font-size:11px;color:#4f5a7a;">AI CUSTOMER SUPPORT SYSTEM 2026</p>', unsafe_allow_html=True)
 with col_h2:
-    st.markdown('<div class="live-badge">● LIVE SYSTEM</div>', unsafe_allow_html=True)
+    st.markdown('<div class="live-badge">LIVE SYSTEM</div>', unsafe_allow_html=True)
 
 st.divider()
 
-# ── METRICS ──────────────────────────────────────────
+# METRICS
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Total Queries", len(df))
 col2.metric("Auto-Resolvable", "71%")
@@ -128,17 +167,16 @@ col4.metric("Categories", df["category"].nunique())
 
 st.divider()
 
-# ── CHARTS ──────────────────────────────────────────
+# CHARTS
 col_a, col_b = st.columns(2)
+
+colors = ["#6366f1","#f59e0b","#ef4444","#ec4899","#06b6d4","#10b981","#8b5cf6"]
 
 with col_a:
     st.markdown('<p class="section-label">Issue Distribution</p>', unsafe_allow_html=True)
     dist = df["category"].value_counts().reset_index()
     dist.columns = ["Category", "Count"]
     dist["Percentage"] = (dist["Count"] / dist["Count"].sum() * 100).round(1)
-
-    colors = ["#6366f1","#f59e0b","#ef4444","#ec4899","#06b6d4","#10b981","#8b5cf6"]
-
     fig1 = go.Figure(go.Bar(
         x=dist["Count"],
         y=dist["Category"],
@@ -181,56 +219,33 @@ with col_b:
 
 st.divider()
 
-# ── PRIORITY ──────────────────────────────────────────
+# PRIORITY
 st.markdown('<p class="section-label">Priority Breakdown</p>', unsafe_allow_html=True)
 col_p1, col_p2, col_p3 = st.columns(3)
-high = len(df[df["priority"] == "High"])
-med  = len(df[df["priority"] == "Medium"])
-low  = len(df[df["priority"] == "Low"])
+high  = len(df[df["priority"] == "High"])
+med   = len(df[df["priority"] == "Medium"])
+low   = len(df[df["priority"] == "Low"])
 total = len(df)
 with col_p1:
-    st.error(f"**High — {high} queries ({round(high/total*100)}%)**\nRefund + Payment issues")
+    st.error(f"**High: {high} queries ({round(high/total*100)}%)**\nRefund + Payment issues")
 with col_p2:
-    st.warning(f"**Medium — {med} queries ({round(med/total*100)}%)**\nDelivery + Product + Subscription")
+    st.warning(f"**Medium: {med} queries ({round(med/total*100)}%)**\nDelivery + Product + Subscription")
 with col_p3:
-    st.success(f"**Low — {low} queries ({round(low/total*100)}%)**\nOrder Tracking + General")
+    st.success(f"**Low: {low} queries ({round(low/total*100)}%)**\nOrder Tracking + General")
 
 st.divider()
 
-# ── GROQ AI LIVE ANALYZER ──────────────────────────────────────────
-st.markdown('<p class="section-label">Groq AI — Live Query Analyzer</p>', unsafe_allow_html=True)
-st.markdown('<p style="font-size:12px;color:#4f5a7a;font-family:\'DM Mono\',monospace;">Type any customer query — Groq AI will classify, prioritize and suggest a reply</p>', unsafe_allow_html=True)
+# LIVE QUERY ANALYZER
+st.markdown('<p class="section-label">Live Query Analyzer</p>', unsafe_allow_html=True)
+st.markdown('<p style="font-size:12px;color:#4f5a7a;font-family:\'DM Mono\',monospace;">Type any customer query to classify and get a suggested reply instantly</p>', unsafe_allow_html=True)
 
-user_query = st.text_input("", placeholder="e.g. Where is my order? / My payment failed...")
+user_query = st.text_input("", placeholder="e.g. Where is my order? My payment failed...")
 
-if st.button("Analyze with AI"):
-    if user_query:
-        with st.spinner("Groq AI analyzing..."):
-            response = client.chat.completions.create(
-                model="llama3-8b-8192",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": """You are a customer support AI for Beastlife, a supplement brand.
-Analyze the customer query and respond in this exact format:
-
-Category: [one of: Order Tracking, Delivery Delay, Refund Request, Payment Failure, Product Complaint, Subscription Issue, General Question]
-Priority: [High / Medium / Low]
-Suggested Reply: [a short friendly professional reply to send to the customer]"""
-                    },
-                    {"role": "user", "content": user_query}
-                ]
-            )
-
-        result = response.choices[0].message.content
-        category, priority, reply = "", "", ""
-        for line in result.strip().split("\n"):
-            if line.startswith("Category:"):
-                category = line.replace("Category:", "").strip()
-            elif line.startswith("Priority:"):
-                priority = line.replace("Priority:", "").strip()
-            elif line.startswith("Suggested Reply:"):
-                reply = line.replace("Suggested Reply:", "").strip()
+if st.button("Analyze"):
+    if user_query.strip():
+        category = classify_query(user_query)
+        priority = get_priority(category)
+        reply    = REPLIES[category]
 
         col_r1, col_r2, col_r3 = st.columns(3)
         with col_r1:
@@ -244,10 +259,12 @@ Suggested Reply: [a short friendly professional reply to send to the customer]""
                 st.success(f"**Priority**\n\n{priority}")
         with col_r3:
             st.success(f"**Suggested Reply**\n\n{reply}")
+    else:
+        st.warning("Please enter a query first!")
 
 st.divider()
 
-# ── QUERY LOG ──────────────────────────────────────────
+# QUERY LOG
 st.markdown('<p class="section-label">Query Log</p>', unsafe_allow_html=True)
 p_filter = st.selectbox("Filter by priority", ["All", "High", "Medium", "Low"])
 c_filter = st.selectbox("Filter by category", ["All"] + sorted(df["category"].unique().tolist()))
@@ -262,21 +279,12 @@ st.dataframe(filtered[["query", "category", "priority"]], use_container_width=Tr
 
 st.divider()
 
-# ── AUTOMATION ──────────────────────────────────────────
+# AUTOMATION
 st.markdown('<p class="section-label">Automation Opportunities</p>', unsafe_allow_html=True)
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.info("**Order Tracking — 29%**\n\nAuto-send tracking link on WhatsApp within 2 mins.")
+    st.info("**Order Tracking: 29%**\n\nAuto-send tracking link on WhatsApp within 2 mins.")
 with col2:
-    st.warning("**Delivery Delay — 18%**\n\nProactive delay alert before customer complains.")
+    st.warning("**Delivery Delay: 18%**\n\nProactive delay alert before customer complains.")
 with col3:
-    st.error("**Refund Request — 16%**\n\nAuto-acknowledge + escalate if pending 7+ days.")
-```
-
----
-
-Ye replace karo existing `app.py` se — dark theme, Syne font, Groq AI sab kuch hai! 🔥
-
-Groq key Streamlit secrets mein daal dena:
-```
-GROQ_API_KEY = "gsk_xxxxxx"
+    st.error("**Refund Request: 16%**\n\nAuto-acknowledge and escalate if pending 7 or more days.")
