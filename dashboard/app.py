@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
-import subprocess
 import os
 
 st.set_page_config(
@@ -14,28 +12,23 @@ st.set_page_config(
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@400;500&display=swap');
-
 html, body, [class*="css"] {
     font-family: 'Syne', sans-serif !important;
     background-color: #080b14 !important;
     color: #e8eaf6 !important;
 }
-
 .stApp { background-color: #080b14 !important; }
-
 [data-testid="metric-container"] {
     background: rgba(255,255,255,0.03);
     border: 1px solid rgba(255,255,255,0.07);
     border-radius: 16px;
     padding: 16px;
 }
-
 [data-testid="stMetricValue"] {
     font-family: 'Syne', sans-serif !important;
     font-size: 32px !important;
     font-weight: 800 !important;
 }
-
 div[data-testid="stTextInput"] input {
     background: rgba(255,255,255,0.05) !important;
     border: 1px solid rgba(99,102,241,0.3) !important;
@@ -43,7 +36,6 @@ div[data-testid="stTextInput"] input {
     color: #e8eaf6 !important;
     font-family: 'DM Mono', monospace !important;
 }
-
 .stButton button {
     background: #6366f1 !important;
     border: none !important;
@@ -53,13 +45,9 @@ div[data-testid="stTextInput"] input {
     font-weight: 700 !important;
     padding: 10px 24px !important;
 }
-
 .stButton button:hover { background: #4f46e5 !important; }
-
 .block-container { padding: 2rem 2rem 2rem !important; }
-
 h1, h2, h3 { font-family: 'Syne', sans-serif !important; color: #e8eaf6 !important; }
-
 .section-label {
     font-family: 'DM Mono', monospace;
     font-size: 10px;
@@ -68,7 +56,6 @@ h1, h2, h3 { font-family: 'Syne', sans-serif !important; color: #e8eaf6 !importa
     letter-spacing: 2px;
     margin-bottom: 12px;
 }
-
 .live-badge {
     display: inline-flex;
     align-items: center;
@@ -83,11 +70,6 @@ h1, h2, h3 { font-family: 'Syne', sans-serif !important; color: #e8eaf6 !importa
 }
 </style>
 """, unsafe_allow_html=True)
-
-if not os.path.exists("dataset/classified_queries.csv"):
-    subprocess.run(["python", "src/classifier.py"])
-
-df = pd.read_csv("dataset/classified_queries.csv")
 
 CATEGORIES = {
     "Order Tracking": [
@@ -125,9 +107,9 @@ CATEGORIES = {
 
 REPLIES = {
     "Order Tracking":     "Hi! Your order is being processed. Here is your tracking link: [link]. Expected delivery in 3-5 days.",
-    "Delivery Delay":     "Sorry for the delay! Your order is on its way. Our team is monitoring it closely and will update you soon.",
+    "Delivery Delay":     "Sorry for the delay! Your order is on its way. Our team is monitoring it and will update you soon.",
     "Refund Request":     "We have received your refund request and will process it within 5-7 business days. Thank you for your patience.",
-    "Payment Failure":    "Sorry for the inconvenience! Please retry using this link: [retry-link]. Contact us if the issue persists.",
+    "Payment Failure":    "Sorry for the inconvenience! Please retry your payment using this link: [retry-link]. Contact us if issue persists.",
     "Product Complaint":  "We are sorry about your experience! Please share photos and we will arrange a replacement immediately.",
     "Subscription Issue": "We have noted your subscription concern. Our team will resolve it within 24 hours.",
     "General Question":   "Thanks for reaching out! Our support team will get back to you shortly.",
@@ -148,7 +130,12 @@ def get_priority(category):
         return "Medium"
     return "Low"
 
-# HEADER
+df = pd.read_csv("dataset/customer_queries.csv")
+df["category"] = df["query"].apply(classify_query)
+df["priority"] = df["category"].apply(get_priority)
+
+colors = ["#6366f1","#f59e0b","#ef4444","#ec4899","#06b6d4","#10b981","#8b5cf6"]
+
 col_h1, col_h2 = st.columns([3, 1])
 with col_h1:
     st.markdown("## Beastlife Intelligence")
@@ -158,7 +145,6 @@ with col_h2:
 
 st.divider()
 
-# METRICS
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Total Queries", len(df))
 col2.metric("Auto-Resolvable", "71%")
@@ -167,16 +153,15 @@ col4.metric("Categories", df["category"].nunique())
 
 st.divider()
 
-# CHARTS
+st.markdown('<p class="section-label">Issue Distribution</p>', unsafe_allow_html=True)
+
+dist = df["category"].value_counts().reset_index()
+dist.columns = ["Category", "Count"]
+dist["Percentage"] = (dist["Count"] / dist["Count"].sum() * 100).round(1)
+
 col_a, col_b = st.columns(2)
 
-colors = ["#6366f1","#f59e0b","#ef4444","#ec4899","#06b6d4","#10b981","#8b5cf6"]
-
 with col_a:
-    st.markdown('<p class="section-label">Issue Distribution</p>', unsafe_allow_html=True)
-    dist = df["category"].value_counts().reset_index()
-    dist.columns = ["Category", "Count"]
-    dist["Percentage"] = (dist["Count"] / dist["Count"].sum() * 100).round(1)
     fig1 = go.Figure(go.Bar(
         x=dist["Count"],
         y=dist["Category"],
@@ -192,12 +177,11 @@ with col_a:
         xaxis=dict(showgrid=False, showticklabels=False),
         yaxis=dict(showgrid=False),
         margin=dict(t=10, b=10, l=10, r=60),
-        height=280,
+        height=300,
     )
     st.plotly_chart(fig1, use_container_width=True)
 
 with col_b:
-    st.markdown('<p class="section-label">Donut Chart</p>', unsafe_allow_html=True)
     fig2 = go.Figure(go.Pie(
         labels=dist["Category"],
         values=dist["Count"],
@@ -213,13 +197,12 @@ with col_b:
         showlegend=True,
         legend=dict(font=dict(color="#a0aec0", size=10), bgcolor="rgba(0,0,0,0)"),
         margin=dict(t=10, b=10),
-        height=280,
+        height=300,
     )
     st.plotly_chart(fig2, use_container_width=True)
 
 st.divider()
 
-# PRIORITY
 st.markdown('<p class="section-label">Priority Breakdown</p>', unsafe_allow_html=True)
 col_p1, col_p2, col_p3 = st.columns(3)
 high  = len(df[df["priority"] == "High"])
@@ -235,9 +218,8 @@ with col_p3:
 
 st.divider()
 
-# LIVE QUERY ANALYZER
-st.markdown('<p class="section-label">Live Query Analyzer</p>', unsafe_allow_html=True)
-st.markdown('<p style="font-size:12px;color:#4f5a7a;font-family:\'DM Mono\',monospace;">Type any customer query to classify and get a suggested reply instantly</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-label">Live Query Analyzer — AI Automation</p>', unsafe_allow_html=True)
+st.markdown('<p style="font-size:12px;color:#4f5a7a;font-family:\'DM Mono\',monospace;">Type any customer query — system will auto-classify, prioritize and suggest reply</p>', unsafe_allow_html=True)
 
 user_query = st.text_input("", placeholder="e.g. Where is my order? My payment failed...")
 
@@ -246,7 +228,6 @@ if st.button("Analyze"):
         category = classify_query(user_query)
         priority = get_priority(category)
         reply    = REPLIES[category]
-
         col_r1, col_r2, col_r3 = st.columns(3)
         with col_r1:
             st.info(f"**Category**\n\n{category}")
@@ -264,7 +245,6 @@ if st.button("Analyze"):
 
 st.divider()
 
-# QUERY LOG
 st.markdown('<p class="section-label">Query Log</p>', unsafe_allow_html=True)
 p_filter = st.selectbox("Filter by priority", ["All", "High", "Medium", "Low"])
 c_filter = st.selectbox("Filter by category", ["All"] + sorted(df["category"].unique().tolist()))
@@ -275,16 +255,19 @@ if p_filter != "All":
 if c_filter != "All":
     filtered = filtered[filtered["category"] == c_filter]
 
-st.dataframe(filtered[["query", "category", "priority"]], use_container_width=True, hide_index=True)
+st.dataframe(
+    filtered[["query", "category", "priority"]],
+    use_container_width=True,
+    hide_index=True
+)
 
 st.divider()
 
-# AUTOMATION
 st.markdown('<p class="section-label">Automation Opportunities</p>', unsafe_allow_html=True)
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.info("**Order Tracking: 29%**\n\nAuto-send tracking link on WhatsApp within 2 mins.")
+    st.info("**Order Tracking: 29%**\n\nAuto-send tracking link on WhatsApp within 2 mins. No human needed.")
 with col2:
-    st.warning("**Delivery Delay: 18%**\n\nProactive delay alert before customer complains.")
+    st.warning("**Delivery Delay: 18%**\n\nProactive delay alert before customer complains. Reduces tickets by 60%.")
 with col3:
     st.error("**Refund Request: 16%**\n\nAuto-acknowledge and escalate if pending 7 or more days.")
